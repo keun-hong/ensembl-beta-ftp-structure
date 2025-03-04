@@ -3,7 +3,7 @@ name: Update FTP Folder Structure
 on:
   schedule:
     # Runs every 10 minutes (UTC)
-    - cron: '*/10 * * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -22,12 +22,12 @@ jobs:
         sudo apt-get install -y lftp
         pip install --upgrade pip
 
-    - name: Fetch FTP folder structure
+    - name: Fetch FTP folder structure using ls -R
       env:
-        FTP_SERVER: "ftp.ensembl.org"  # Replace with your FTP server address if needed
-        FTP_PATH: "/pub"               # Replace with the desired path
+        FTP_SERVER: "ftp.ebi.ac.uk"  # Replace with your FTP server if needed
+        FTP_PATH: "/pub/ensemblorganisms"  # Replace with desired FTP path
       run: |
-        lftp -c "open $FTP_SERVER; find $FTP_PATH" > ensembl-beta_ftp_structure.txt
+        lftp -c "open $FTP_SERVER; cd $FTP_PATH; ls -R" > tree_lsR.txt
 
     - name: Convert structure to JSON
       run: |
@@ -35,43 +35,41 @@ jobs:
         import json
 
         def parse_ls_output(file_path):
-            # Initialize an empty dictionary to hold the directory tree
             tree = {}
-            # List to hold the current directory path components
-            current_path = []
+            current_path = []  # Current directory path (list)
             
             with open(file_path, "r") as f:
                 for line in f:
                     line = line.rstrip("\n")
                     if not line:
                         continue
-                    # Check if the line is a directory header (ends with ":")
+                    # Directory header (lines ending with ':')
                     if line.endswith(":"):
                         header = line[:-1]
-                        # If the header is the root (".") set current_path to an empty list
+                        # If header is the root, set current_path to empty list
                         if header == ".":
                             current_path = []
                         else:
-                            # Remove the "./" prefix if present, then split the path by "/"
+                            # Remove the "./" prefix if present, then split path by "/"
                             if header.startswith("./"):
                                 header = header[2:]
                             current_path = header.split("/")
                         continue
                     
-                    # The lftp ls output format is: permissions, link count, owner, group, size, date, time, filename.
-                    # Since filenames may contain spaces, join the parts from the 9th field onward.
+                    # The ls output is in the format: permissions, link count, owner, group, size, date, time, filename.
+                    # Since filenames may contain spaces, join fields from the 9th element onward.
                     parts = line.split()
                     if len(parts) < 9:
                         continue  # Skip unexpected format lines
                     filename = " ".join(parts[8:])
-                    # Determine if the entry is a directory (permissions field starts with "d")
+                    # If the first field starts with 'd', it is a directory.
                     is_dir = parts[0].startswith("d")
                     
-                    # Navigate through the tree based on the current path
+                    # Navigate through the tree based on the current path.
                     node = tree
                     for part in current_path:
                         node = node.setdefault(part, {})
-                    # Add the file or directory entry to the current node
+                    # Add the file or directory entry.
                     if is_dir:
                         node[filename] = {}
                     else:
@@ -94,9 +92,8 @@ jobs:
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        # Commit only if there are changes in the JSON file
-        if [ -n "$(git status --porcelain tree_lsR.json)" ]; then
-          git add ensembl-beta_ftp_structure.json
+        if [ -n "$(git status --porcelain ensembl-beta_ftp_structure.json)" ]; then
+          git add ensembl-beta_ftp_structure.txt ensembl-beta_ftp_structure.json
           git commit -m "Update FTP folder structure"
           git push
         else
