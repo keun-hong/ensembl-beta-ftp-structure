@@ -27,7 +27,7 @@ jobs:
         FTP_SERVER: "ftp.ebi.ac.uk"  # Replace with your FTP server if needed
         FTP_PATH: "/pub/ensemblorganisms"  # Replace with desired FTP path
       run: |
-        lftp -c "open $FTP_SERVER; cd $FTP_PATH; ls -R" > tree_lsR.txt
+        lftp -c "open $FTP_SERVER; cd $FTP_PATH; ls -R" > ensembl-beta_ftp_structure.txt
 
     - name: Convert structure to JSON
       run: |
