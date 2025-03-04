@@ -88,13 +88,36 @@ jobs:
             print(f"Directory structure saved to {output_file}.")
         EOF
 
+    - name: Generate information file
+      run: |
+        python3 << 'EOF'
+        import json
+
+        # Load the JSON file containing the folder structure.
+        with open("ensembl-beta_ftp_structure.json", "r") as f:
+            data = json.load(f)
+
+        # Prepare the header and rows.
+        rows = ["species\tgenome"]
+        for species, genomes in data.items():
+            # Count genome IDs that start with "GCA_" or "GCF_"
+            count = sum(1 for genome_id in genomes.keys() if genome_id.startswith("GCA_") or genome_id.startswith("GCF_"))
+            rows.append(f"{species}\t{count}")
+
+        # Write the table to information.txt
+        with open("information.txt", "w") as out_file:
+            out_file.write("\n".join(rows))
+        
+        print("Information file saved to information.txt.")
+        EOF
+
     - name: Commit and push changes
       run: |
         git config --global user.name "keun-hong"
         git config --global user.email "thsrms9216@gmail.com"
-        if [ -n "$(git status --porcelain ensembl-beta_ftp_structure.json)" ]; then
-          git add ensembl-beta_ftp_structure.txt ensembl-beta_ftp_structure.json
-          git commit -m "Update FTP folder structure"
+        if [ -n "$(git status --porcelain ensembl-beta_ftp_structure.json information.txt)" ]; then
+          git add ensembl-beta_ftp_structure.txt ensembl-beta_ftp_structure.json information.txt
+          git commit -m "Update FTP folder structure and information"
           git push https://keun-hong:${{ secrets.MY_PAT }}@github.com/keun-hong/ensembl-beta-ftp-structure.git
         else
           echo "No changes to commit."
