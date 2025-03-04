@@ -3,7 +3,7 @@ name: Update FTP Folder Structure
 on:
   schedule:
     # Runs every 30 minutes (UTC)
-    - cron: '*/30 * * * *'
+    - cron: '0 15 * * *'
   workflow_dispatch:
 
 jobs:
