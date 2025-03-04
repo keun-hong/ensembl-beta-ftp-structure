@@ -95,7 +95,7 @@ jobs:
         if [ -n "$(git status --porcelain ensembl-beta_ftp_structure.json)" ]; then
           git add ensembl-beta_ftp_structure.txt ensembl-beta_ftp_structure.json
           git commit -m "Update FTP folder structure"
-          git push
+          git push https://keun-hong:${{ secrets.MY_PAT }}@github.com/keun-hong/ensembl-beta-ftp-structure.git
         else
           echo "No changes to commit."
         fi
