@@ -98,16 +98,30 @@ jobs:
             data = json.load(f)
 
         # Prepare the header and rows.
-        rows = ["species\tgenome"]
-        for species, genomes in data.items():
+        ls_species = ["Species\tGenome"]
+        ls_total = ["Species\tGenome"]
+        species_num = 0
+        genome_num = 0
+
+        for species, genome in data.items():
+            # Pass the "test" folder
+            if species == "test":
+                continue
             # Count genome IDs that start with "GCA_" or "GCF_"
-            count = sum(1 for genome_id in genomes.keys() if genome_id.startswith("GCA_") or genome_id.startswith("GCF_"))
-            rows.append(f"{species}\t{count}")
+            count = sum(1 for genome_id in genome.keys() if genome_id.startswith("GCA_") or genome_id.startswith("GCF_"))
+            ls_species.append(f"{species}\t{count}")
+            
+            species_num += 1
+            genome_num += count
+        # Total number of species and genomes
+        ls_total.append(f"{species_num}\t{genome_num}")
 
         # Write the table to information.txt
-        with open("information.txt", "w") as out_file:
-            out_file.write("\n".join(rows))
-        
+        with open("ensembl-beta_count_species.txt", "w") as out_file:
+            out_file.write("\n".join(ls_species))
+        with open("ensembl-beta_count_total.txt", "w") as out_file:
+            out_file.write("\n".join(ls_total))
+
         print("Information file saved to information.txt.")
         EOF
 
