@@ -116,21 +116,19 @@ jobs:
         # Total number of species and genomes
         ls_total.append(f"{species_num}\t{genome_num}")
 
-        # Write the table to information.txt
+        # Write output tables
         with open("ensembl-beta_count_species.txt", "w") as out_file:
             out_file.write("\n".join(ls_species))
         with open("ensembl-beta_count_total.txt", "w") as out_file:
             out_file.write("\n".join(ls_total))
-
-        print("Information file saved to information.txt.")
         EOF
 
     - name: Commit and push changes
       run: |
         git config --global user.name "keun-hong"
         git config --global user.email "thsrms9216@gmail.com"
-        if [ -n "$(git status --porcelain ensembl-beta_ftp_structure.json information.txt)" ]; then
-          git add ensembl-beta_ftp_structure.txt ensembl-beta_ftp_structure.json information.txt
+        if [ -n "$(git status --porcelain ensembl-beta_ftp_structure.json ensembl-beta_count_species.txt ensembl-beta_count_total.txt)" ]; then
+          git add ensembl-beta_ftp_structure.txt ensembl-beta_ftp_structure.json ensembl-beta_count_species.txt ensembl-beta_count_total.txt
           git commit -m "Update FTP folder structure and information"
           git push https://keun-hong:${{ secrets.MY_PAT }}@github.com/keun-hong/ensembl-beta-ftp-structure.git
         else
