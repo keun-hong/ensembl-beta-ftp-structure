@@ -29,7 +29,7 @@ jobs:
       run: |
         lftp -c "open $FTP_SERVER; cd $FTP_PATH; ls -R" > ensembl-beta_ftp_structure.txt
 
-    - name: Convert structure to JSON (excluding 'vep' folders)
+    - name: Convert structure to JSON (excluding 'vep' folders and the 'test' folder)
       run: |
         python3 << 'EOF'
         import json
@@ -46,7 +46,6 @@ jobs:
                     # Directory header (lines ending with ':')
                     if line.endswith(":"):
                         header = line[:-1]
-                        # If header is the root, set current_path to empty list
                         if header == ".":
                             current_path = []
                         else:
@@ -56,34 +55,35 @@ jobs:
                             current_path = header.split("/")
                         continue
                     
-                    # The ls output is in the format:
-                    # permissions, link count, owner, group, size, date, time, filename.
-                    # Since filenames may contain spaces, join fields from the 9th element onward.
+                    # ls output: permissions, link count, owner, group, size, date, time, filename.
+                    # Join fields from the 9th element onward to accommodate spaces in filenames.
                     parts = line.split()
                     if len(parts) < 9:
-                        continue  # Skip unexpected format lines
+                        continue  # Skip lines that do not match expected format
                     filename = " ".join(parts[8:])
-                    # If the first field starts with 'd', it is a directory.
                     is_dir = parts[0].startswith("d")
                     
-                    # Navigate through the tree based on the current path.
+                    # Navigate through the tree based on current_path.
                     node = tree
                     for part in current_path:
                         node = node.setdefault(part, {})
-                    # Add the file or directory entry.
                     if is_dir:
                         node[filename] = {}
                     else:
                         node[filename] = None
             return tree
 
-        def remove_vep(tree):
-            # For each species, remove "vep" key from genome folders.
+        def remove_unwanted(tree):
+            # Remove the top-level "test" folder if it exists.
+            if "test" in tree:
+                del tree["test"]
+            # For each species (top-level key), remove the "vep" folder from genome folders.
             for species, genomes in tree.items():
-                for genome in list(genomes.keys()):
-                    if genome.startswith("GCA_") or genome.startswith("GCF_"):
-                        if "vep" in genomes[genome]:
-                            del genomes[genome]["vep"]
+                if isinstance(genomes, dict):
+                    for genome in list(genomes.keys()):
+                        if genome.startswith("GCA_") or genome.startswith("GCF_"):
+                            if "vep" in genomes[genome]:
+                                del genomes[genome]["vep"]
             return tree
 
         if __name__ == "__main__":
@@ -91,8 +91,7 @@ jobs:
             output_file = "ensembl-beta_ftp_structure.json"
             
             directory_tree = parse_ls_output(input_file)
-            # Remove the "vep" folders from each genome directory.
-            directory_tree = remove_vep(directory_tree)
+            directory_tree = remove_unwanted(directory_tree)
             
             with open(output_file, "w") as out_f:
                 json.dump(directory_tree, out_f, indent=4)
@@ -109,23 +108,21 @@ jobs:
         with open("ensembl-beta_ftp_structure.json", "r") as f:
             data = json.load(f)
 
-        # Prepare two output tables: one listing each species' genome count and one with the total counts.
+        # Prepare output tables.
         ls_species = ["Species\tGenome"]
         ls_total = ["Species\tGenome"]
         species_num = 0
         genome_num = 0
 
         for species, genomes in data.items():
-            # Exclude any species folder named "test"
+            # Exclude species folder "test" (should already be removed, but extra check)
             if species == "test":
                 continue
-            # Count genome IDs that start with "GCA_" or "GCF_"
             count = sum(1 for genome_id in genomes.keys() if genome_id.startswith("GCA_") or genome_id.startswith("GCF_"))
             ls_species.append(f"{species}\t{count}")
             species_num += 1
             genome_num += count
 
-        # Append the total counts.
         ls_total.append(f"{species_num}\t{genome_num}")
 
         with open("ensembl-beta_count_species.txt", "w") as out_file:
