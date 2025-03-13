@@ -1,9 +1,9 @@
-name: Update FTP Folder Structure
+name: Gencube Data Aggregator Pipeline
 
 on:
   schedule:
     # Runs every 30 minutes (UTC) at 03:00 and 15:00 UTC (i.e. midnight and noon in KST)
-    - cron: '0 3,15 * * *'
+    - cron: '0 15 * * *'
   workflow_dispatch:
 
 jobs:
@@ -21,6 +21,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y lftp
         pip install --upgrade pip
+        pip install selenium
 
     - name: Fetch FTP folder structure using ls -R
       env:
@@ -133,13 +134,85 @@ jobs:
         print("Information files saved to ensembl-beta_count_species.txt and ensembl-beta_count_total.txt.")
         EOF
 
+    - name: Fetch SRA advanced index list using Selenium
+      run: |
+        python3 << 'EOF'
+        import time, re, pickle
+        from selenium import webdriver
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait, Select
+        from selenium.webdriver.support import expected_conditions as EC
+
+        # Set up Chrome options for headless mode
+        options = webdriver.ChromeOptions()
+        options.add_argument("--headless")
+
+        # Initialize WebDriver (ensure ChromeDriver is installed or available in PATH)
+        driver = webdriver.Chrome(options=options)
+
+        # Open the NCBI SRA advanced search page
+        driver.get("https://www.ncbi.nlm.nih.gov/sra/advanced")
+        time.sleep(3)  # Wait for the page to load
+
+        # List of fields to extract along with the corresponding variable names
+        fields_to_extract = [
+            ("Strategy", "LS_STRATEGY"),
+            ("Source", "LS_SOURCE"),
+            ("Platform", "LS_PLATFORM"),
+            ("Selection", "LS_SELECTION"),
+            ("Filter", "LS_FILTER"),
+            ("Properties", "LS_PROPERTIES")
+        ]
+
+        results = {}
+
+        # Loop through each field and extract the index list
+        for field, varname in fields_to_extract:
+            # Select the field from the dropdown (id="ff_0")
+            dropdown = Select(driver.find_element(By.ID, "ff_0"))
+            dropdown.select_by_visible_text(field)
+            time.sleep(1)  # Wait for the selection to be applied
+
+            # Wait until the "Show index list" button is clickable
+            show_index_button = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH, "//select[@id='ff_0']/following::a[@class='show_index'][1]"))
+            )
+            # Scroll the button into view
+            driver.execute_script("arguments[0].scrollIntoView(true);", show_index_button)
+            time.sleep(1)  # Allow time for scrolling
+            # Click the button using JavaScript to avoid click interception issues
+            driver.execute_script("arguments[0].click();", show_index_button)
+            time.sleep(3)  # Wait for the index list to load
+
+            # Retrieve the options from the <select id="terms_list"> element
+            terms_select = driver.find_element(By.ID, "terms_list")
+            option_elements = terms_select.find_elements(By.TAG_NAME, "option")
+            processed_list = []
+            for option in option_elements:
+                text = option.text.strip()
+                # Remove parentheses and its content (e.g., "amplicon (15093690)" -> "amplicon")
+                text_no_paren = re.sub(r'\s*\(.*?\)', '', text)
+                # Replace spaces with underscores
+                processed = text_no_paren.replace(' ', '_')
+                processed_list.append(processed)
+            results[varname] = processed_list
+
+        driver.quit()
+
+        # Save the results dictionary using pickle for efficient storage
+        with open("sra_advanced_index.pkl", "wb") as f:
+            pickle.dump(results, f)
+
+        print("SRA advanced index list saved to sra_advanced_index.pkl.")
+        EOF
+
     - name: Commit and push changes
       run: |
         git config --global user.name "keun-hong"
         git config --global user.email "thsrms9216@gmail.com"
-        if [ -n "$(git status --porcelain ensembl-beta_ftp_structure.json ensembl-beta_count_species.txt ensembl-beta_count_total.txt)" ]; then
-          git add ensembl-beta_ftp_structure.txt ensembl-beta_ftp_structure.json ensembl-beta_count_species.txt ensembl-beta_count_total.txt
-          git commit -m "Update FTP folder structure and information"
+        if [ -n "$(git status --porcelain ensembl-beta_ftp_structure.json ensembl-beta_count_species.txt ensembl-beta_count_total.txt sra_advanced_index.pkl)" ]; then
+          git add ensembl-beta_ftp_structure.json ensembl-beta_count_species.txt ensembl-beta_count_total.txt sra_advanced_index.pkl
+          git commit -m "Update FTP folder structure, information, and SRA advanced index list"
           git push https://keun-hong:${{ secrets.MY_PAT }}@github.com/keun-hong/ensembl-beta-ftp-structure.git
         else
           echo "No changes to commit."
